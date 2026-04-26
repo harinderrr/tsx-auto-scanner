@@ -17,8 +17,6 @@ TSX_60_BACKUP = [
     {"ticker": "IMO.TO", "sector": "Energy"},
     {"ticker": "CVE.TO", "sector": "Energy"},
     {"ticker": "ARX.TO", "sector": "Energy"},
-    {"ticker": "CPG.TO", "sector": "Energy"},
-    {"ticker": "MEG.TO", "sector": "Energy"},
     # Materials
     {"ticker": "ABX.TO", "sector": "Materials"},
     {"ticker": "AEM.TO", "sector": "Materials"},
@@ -74,12 +72,6 @@ TSX_60_BACKUP = [
     # Communication
     {"ticker": "BCE.TO", "sector": "Communication Services"},
     {"ticker": "T.TO",   "sector": "Communication Services"},
-    {"ticker": "RCI.TO", "sector": "Communication Services"},
-    {"ticker": "QBR.TO", "sector": "Communication Services"},
-    # Real Estate
-    {"ticker": "REI.TO", "sector": "Real Estate"},
-    {"ticker": "CAR.TO", "sector": "Real Estate"},
-    {"ticker": "SRU.TO", "sector": "Real Estate"},
 ]
 
 _TICKER_RE = re.compile(r"^[A-Z0-9]+\.TO$")
@@ -140,12 +132,24 @@ def get_tsx_universe() -> list[dict]:
 
     Primary source: Wikipedia TSX Composite constituent table.
     Fallback: hardcoded TSX 60 list.
+    Config.WATCHLIST stocks are always merged in regardless of source.
     """
+    from config import Config
+
     try:
-        return _fetch_wikipedia()
+        base = _fetch_wikipedia()
     except Exception as e:
         logger.warning(f"Wikipedia fetch failed ({e}). Using TSX 60 backup list.")
-        return list(TSX_60_BACKUP)
+        base = list(TSX_60_BACKUP)
+
+    # Merge watchlist — add any ticker not already present
+    existing = {s["ticker"] for s in base}
+    for stock in Config.WATCHLIST:
+        if stock["ticker"] not in existing:
+            base.append(stock)
+            logger.info(f"Watchlist injection: {stock['ticker']} added to universe")
+
+    return base
 
 
 def get_earnings_calendar(tickers: list[str]) -> dict[str, bool]:

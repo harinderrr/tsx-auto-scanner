@@ -11,3 +11,13 @@ class Config:
     RISK_PCT: float = float(os.getenv("RISK_PCT", "0.02"))
     PRICE_CHECK_INTERVAL: int = int(os.getenv("PRICE_CHECK_INTERVAL", "300"))
     MIN_VOLUME: int = 500_000
+
+    # Always-include stocks — merged into the universe regardless of source
+    WATCHLIST: list[dict] = [
+        {"ticker": "FFH.TO", "sector": "Financials"},   # Fairfax Financial
+        {"ticker": "CSU.TO", "sector": "Technology"},   # Constellation Software
+        {"ticker": "CLS.TO", "sector": "Technology"},   # Celestica
+        {"ticker": "IFC.TO", "sector": "Financials"},   # Intact Financial
+        {"ticker": "WSP.TO", "sector": "Industrials"},  # WSP Global
+        {"ticker": "TIH.TO", "sector": "Industrials"},  # Toromont Industries
+    ]
