@@ -3,11 +3,12 @@
 TSX market hours: 7:30 AM – 2:00 PM Mountain Time, weekdays only.
 
 Schedule (all Mountain Time):
-  Mon–Fri 7:00 AM   Pre-market briefing (watchlist near entry zones)
-  Mon–Fri 7:35 AM   Portfolio update (opening prices for active setups)
-  Mon–Fri 7:00–2:30 PM  Price checks every 5 minutes
-  Mon–Fri 2:20 PM   Full TSX universe scan (after close)
-  Saturday 8:00 AM  Weekly review reminder
+  Mon–Fri 7:00 AM         Pre-market briefing (market context + top 3 validated setups)
+  Mon–Fri 7:35 AM         Portfolio update (opening prices for active setups)
+  Mon–Fri 7:00–2:30 PM    Price checks every 5 minutes (entry 0.5%, stop 1.5%, volume 2x)
+  Mon–Fri 1:00 PM         Pre-close briefing (refresh prices on today's top setups)
+  Mon–Fri 2:20 PM         Full TSX universe scan (after close)
+  Saturday 8:00 AM        Weekly review reminder
 """
 import logging
 from datetime import datetime
@@ -19,13 +20,12 @@ from apscheduler.triggers.cron import CronTrigger
 from auto_alerts import send_scan_results
 from auto_scanner import run_full_scan
 from portfolio_update import send_portfolio_update
-from pre_market import send_premarket_briefing
+from pre_market import send_premarket_briefing, send_preclose_briefing
 from price_monitor import run_price_check
 from telegram_bot import send_message
 
 logger = logging.getLogger(__name__)
-
-MT = pytz.timezone("America/Edmonton")  # Mountain Time (Alberta)
+MT = pytz.timezone("America/Edmonton")
 
 
 def _run_auto_scan() -> None:
@@ -57,6 +57,15 @@ def _run_premarket_briefing() -> None:
         send_message(f"❌ Pre-Market Briefing ERROR\n\n{type(e).__name__}: {e}")
 
 
+def _run_preclose_briefing() -> None:
+    logger.info("Pre-close briefing triggered")
+    try:
+        send_preclose_briefing()
+    except Exception as e:
+        logger.exception(f"Pre-close briefing crashed: {e}")
+        send_message(f"❌ Pre-Close Briefing ERROR\n\n{type(e).__name__}: {e}")
+
+
 def _run_price_check() -> None:
     try:
         run_price_check()
@@ -65,7 +74,6 @@ def _run_price_check() -> None:
 
 
 def _send_weekly_reminder() -> None:
-    logger.info("Weekly review reminder triggered")
     ts = datetime.now(MT).strftime("%A %b %d | %I:%M %p MT")
     msg = "\n".join([
         "📅 WEEKLY REVIEW REMINDER",
@@ -80,6 +88,7 @@ def _send_weekly_reminder() -> None:
         f"⏰ {ts}",
     ])
     send_message(msg)
+    logger.info("Weekly review reminder sent")
 
 
 def start_scheduler() -> None:
@@ -104,8 +113,8 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # 3. Intraday price checks — Mon-Fri every 5 min, 7:00 AM–2:55 PM
-    #    The job itself enforces the 2:30 PM cutoff internally.
+    # 3. Intraday price checks — Mon-Fri every 5 min, 7:00 AM – 2:55 PM
+    #    run_price_check() enforces the 2:30 PM cutoff internally.
     scheduler.add_job(
         _run_price_check,
         trigger=CronTrigger(
@@ -119,7 +128,16 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # 4. Full TSX scan — Mon-Fri 2:20 PM MT (after close)
+    # 4. Pre-close briefing — Mon-Fri 1:00 PM MT
+    scheduler.add_job(
+        _run_preclose_briefing,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=13, minute=0, timezone=MT),
+        id="preclose_briefing",
+        name="Pre-Close Briefing (1:00 PM MT)",
+        replace_existing=True,
+    )
+
+    # 5. Full TSX scan — Mon-Fri 2:20 PM MT (after close)
     scheduler.add_job(
         _run_auto_scan,
         trigger=CronTrigger(day_of_week="mon-fri", hour=14, minute=20, timezone=MT),
@@ -128,7 +146,7 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # 5. Weekly review reminder — Saturday 8:00 AM MT
+    # 6. Weekly review reminder — Saturday 8:00 AM MT
     scheduler.add_job(
         _send_weekly_reminder,
         trigger=CronTrigger(day_of_week="sat", hour=8, minute=0, timezone=MT),
@@ -139,11 +157,12 @@ def start_scheduler() -> None:
 
     logger.info(
         "TSX Auto Scanner scheduler started\n"
-        "  Mon-Fri 7:00 AM      Pre-market briefing\n"
-        "  Mon-Fri 7:35 AM      Portfolio update (after open)\n"
-        "  Mon-Fri 7:00-2:30 PM Price checks every 5 min\n"
-        "  Mon-Fri 2:20 PM      Full TSX scan (after close)\n"
-        "  Saturday 8:00 AM     Weekly review reminder"
+        "  Mon-Fri 7:00 AM       Pre-market briefing (autonomous top 3)\n"
+        "  Mon-Fri 7:35 AM       Portfolio update (after open)\n"
+        "  Mon-Fri 7:00-2:30 PM  Price checks every 5 min\n"
+        "  Mon-Fri 1:00 PM       Pre-close briefing (refresh prices)\n"
+        "  Mon-Fri 2:20 PM       Full TSX scan (after close)\n"
+        "  Saturday 8:00 AM      Weekly review reminder"
     )
     try:
         scheduler.start()
