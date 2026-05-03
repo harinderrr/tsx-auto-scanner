@@ -14,6 +14,7 @@ Scoring framework:
   Total:                              100 pts
 """
 
+import math
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass, field
@@ -21,6 +22,10 @@ from typing import Optional
 
 from layers.layer2_patterns import PatternResult, detect_fibonacci_confluence
 from layers.layer3_context  import TrendContext, SRZone, sr_stop_proximity
+from positions import (
+    count_open_positions, count_sector_positions, capital_deployed,
+    MAX_POSITIONS, MAX_SECTOR_POSITIONS, MAX_CAPITAL_PCT, MIN_POSITION_VALUE,
+)
 
 
 # ── Score Thresholds ─────────────────────────────────────────────────────────
@@ -85,6 +90,15 @@ class TradePlan:
     action: str                 # "ENTER", "WATCH", "SKIP"
 
     account_size: float = 1490.0
+
+    # Capital allocation tracking
+    normal_shares: int = 0              # shares before Stage 3 reduction
+    stage3_active: bool = False
+    sizing_notes: list[str] = field(default_factory=list)
+    open_positions: int = 0
+    sector_positions: int = 0
+    trail_breakeven_trigger: float = 0.0   # Stage 3: trail to BE when price hits this
+    trail_plus2_trigger: float = 0.0       # Stage 3: trail to +2% when price hits this
 
 
 # ── Volume Scoring ───────────────────────────────────────────────────────────
@@ -423,10 +437,81 @@ def score_setup(
     if trend.stage == 4:
         action, grade, pos_pct = "SKIP", "D", 0.0
 
-    # ── Position Sizing ───────────────────────────────────────
-    shares, capital = calculate_position_size(entry, stop, account_size, 0.02)
-    shares = int(shares * pos_pct)
-    capital = round(shares * entry, 2)
+    # ── Stage 3 Protocol — grade downgrade ────────────────────
+    stage3_active = (trend.stage == 3)
+    if stage3_active and action != "SKIP":
+        rsi_val = float(r.get("rsi", 50))
+        strong_momentum = (
+            dow_phase.get("phase", "") == "Markup"
+            and rsi_val < 60
+            and vol_ratio > 1.5
+        )
+        if strong_momentum:
+            checklist.append("Stage 3 — strong momentum exception, original grade kept")
+        else:
+            if grade == "A+":
+                grade, pos_pct, action = "B", 0.75, "ENTER"
+                warnings.append("Stage 3 grade downgrade: A+ → B (reduced conviction)")
+            elif grade == "B":
+                grade, pos_pct, action = "C", 0.50, "WATCH"
+                warnings.append("Stage 3 grade downgrade: B → C (watch only)")
+
+    # ── Sector & Position Count Limits ────────────────────────
+    open_pos = count_open_positions()
+    sector_pos = count_sector_positions(sector)
+
+    if action == "ENTER":
+        if sector_pos >= MAX_SECTOR_POSITIONS:
+            action = "WATCH"
+            warnings.append(
+                f"Sector limit reached: {sector_pos}/{MAX_SECTOR_POSITIONS} "
+                f"{sector} positions open"
+            )
+        elif open_pos >= MAX_POSITIONS:
+            action = "WATCH"
+            warnings.append(
+                f"Max positions reached ({open_pos}/{MAX_POSITIONS}) — "
+                f"add to watchlist for next opportunity"
+            )
+
+    # ── Position Sizing with all rules ────────────────────────
+    sizing_notes: list[str] = []
+
+    shares_by_risk, _ = calculate_position_size(entry, stop, account_size, 0.02)
+    shares_by_risk = int(shares_by_risk * pos_pct)
+
+    max_capital_per_trade = account_size * MAX_CAPITAL_PCT
+    shares_by_capital = int(max_capital_per_trade / entry) if entry > 0 else 0
+
+    normal_shares = min(shares_by_risk, shares_by_capital)
+    if shares_by_capital < shares_by_risk:
+        sizing_notes.append(
+            f"Position sized by 35% capital cap, not risk "
+            f"(${shares_by_capital * entry:.0f} < ${max_capital_per_trade:.0f} cap)"
+        )
+
+    # Stage 3: 50% size reduction
+    if stage3_active:
+        final_shares = normal_shares // 2
+        if normal_shares > 0:
+            sizing_notes.append(
+                f"Stage 3 reduction: 50% ({normal_shares} → {final_shares} shares)"
+            )
+    else:
+        final_shares = normal_shares
+
+    capital = round(final_shares * entry, 2)
+
+    # Minimum position value gate
+    if capital < MIN_POSITION_VALUE and action == "ENTER":
+        action = "SKIP"
+        sizing_notes.append(
+            f"Position too small (${capital:.0f} < ${MIN_POSITION_VALUE:.0f}) — not worth commissions"
+        )
+
+    # Stage 3 trailing stop triggers
+    trail_breakeven = round(entry * 1.02, 2) if stage3_active else 0.0
+    trail_plus2     = round(entry * 1.04, 2) if stage3_active else 0.0
 
     # ── Stop at S&R check ─────────────────────────────────────
     stop_ok, _ = sr_stop_proximity(stop, zones, max_pct=4.0)
@@ -460,7 +545,7 @@ def score_setup(
         rrr=rrr,
 
         risk_per_share=round(entry - stop, 2),
-        shares_at_2pct=shares,
+        shares_at_2pct=final_shares,
         capital_deployed=capital,
 
         volume_ratio=round(vol_ratio, 2),
@@ -478,4 +563,12 @@ def score_setup(
         warnings=warnings,
         action=action,
         account_size=account_size,
+
+        normal_shares=normal_shares,
+        stage3_active=stage3_active,
+        sizing_notes=sizing_notes,
+        open_positions=open_pos,
+        sector_positions=sector_pos,
+        trail_breakeven_trigger=trail_breakeven,
+        trail_plus2_trigger=trail_plus2,
     )

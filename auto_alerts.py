@@ -4,6 +4,7 @@ import os
 from datetime import date, datetime, timedelta
 
 from layers.layer4_scoring import TradePlan
+from positions import capital_deployed, MAX_POSITIONS
 from telegram_bot import send_message
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ def _format_enter_alert(plan: TradePlan) -> str:
     max_loss = plan.shares_at_2pct * plan.risk_per_share
     squeeze_str = "Yes" if plan.bb_squeeze else "No"
     ts = datetime.now().strftime("%A %b %d | %I:%M %p MT")
+    max_cap = round(plan.account_size * 0.35, 2)
 
     lines = [
         f"🔍 SETUP ALERT — {plan.ticker}  [{plan.sector}]",
@@ -81,9 +83,33 @@ def _format_enter_alert(plan: TradePlan) -> str:
         f"Target 2: ${plan.target2_price:.2f}     (exit remainder)",
         f"R:R: {plan.rrr:.1f}:1",
         "",
-        f"📐 POSITION  (2% risk / ${plan.account_size:.0f})",
-        f"Shares: {plan.shares_at_2pct}  |  Capital: ${plan.capital_deployed:.0f}",
-        f"Max loss: ${max_loss:.2f}",
+        "📐 POSITION SIZE (after rules)",
+        f"Normal shares: {plan.normal_shares}",
+    ]
+
+    if plan.stage3_active:
+        lines.append(f"Stage 3 reduction: 50% → {plan.shares_at_2pct} shares")
+        lines.append(f"⚠️ STAGE 3 PROTOCOL ACTIVE")
+        lines.append(f"Trail stop to breakeven when price reaches ${plan.trail_breakeven_trigger:.2f}")
+        lines.append(f"Trail stop to +2% when price reaches ${plan.trail_plus2_trigger:.2f}")
+
+    cap_ok = "OK" if plan.capital_deployed <= max_cap else "OVER CAP"
+    lines.append(f"Capital cap check: {cap_ok} (${plan.capital_deployed:.0f} vs ${max_cap:.0f} cap)")
+    lines.append(f"Final position: {plan.shares_at_2pct} shares | ${plan.capital_deployed:.0f} capital")
+    lines.append(f"Max loss: ${max_loss:.2f}")
+    lines.append("")
+    lines.append("Rules applied:")
+    lines.append(f"{'✅' if plan.open_positions < MAX_POSITIONS else '⚠️'} "
+                 f"Position count: {plan.open_positions}/{MAX_POSITIONS} open")
+    lines.append(f"{'✅' if plan.sector_positions < 2 else '⚠️'} "
+                 f"Sector: {plan.sector_positions}/2 {plan.sector} positions")
+    if plan.stage3_active:
+        lines.append(f"⚠️ Stage 3: size reduced to 50%")
+    for note in plan.sizing_notes:
+        if "capital cap" in note.lower():
+            lines.append(f"⚠️ {note}")
+
+    lines += [
         "",
         "📊 INDICATORS",
         f"RSI: {plan.rsi:.1f}  |  MACD: {plan.macd_hist_direction}",
@@ -147,9 +173,22 @@ def _format_summary(plans: list[TradePlan], meta: dict) -> str:
     watches = [p for p in plans if p.action == "WATCH"]
     skipped = meta["total"] - len(enters) - len(watches)
     duration = meta.get("duration_minutes", 0)
-    capital_needed = sum(p.capital_deployed for p in enters)
     account = enters[0].account_size if enters else 1490.0
     ts = datetime.now().strftime("%A %b %d | %I:%M %p MT")
+
+    # Capital allocation summary
+    already_deployed = capital_deployed()
+    new_capital_needed = sum(p.capital_deployed for p in enters)
+    total_deployed = already_deployed + new_capital_needed
+    available = account - already_deployed
+    max_new_pos = round(account * 0.35, 2)
+
+    # Sector exposure from new enters
+    sector_counts: dict[str, int] = {}
+    for p in enters:
+        sector_counts[p.sector] = sector_counts.get(p.sector, 0) + 1
+
+    open_pos_count = enters[0].open_positions if enters else 0
 
     lines = [
         "📊 DAILY SCAN COMPLETE",
@@ -162,7 +201,8 @@ def _format_summary(plans: list[TradePlan], meta: dict) -> str:
     if enters:
         lines.append(f"✅ ENTER NOW ({len(enters)} setup{'s' if len(enters) != 1 else ''}):")
         for p in enters:
-            lines.append(f"  • {p.ticker:<8} Score:{p.score}  Entry:${p.entry_price:.2f}  R:R:{p.rrr:.1f}")
+            s3 = " ⚠️S3" if p.stage3_active else ""
+            lines.append(f"  • {p.ticker:<8} Score:{p.score}  Entry:${p.entry_price:.2f}  R:R:{p.rrr:.1f}{s3}")
     else:
         lines.append("✅ ENTER NOW (0 setups)")
 
@@ -179,9 +219,20 @@ def _format_summary(plans: list[TradePlan], meta: dict) -> str:
         "",
         f"❌ SKIPPED: {skipped} stocks below threshold",
         "",
-        f"Capital needed: ${capital_needed:.0f} of ${account:.0f}",
-        f"⏰ {ts}",
+        "💼 CAPITAL ALLOCATION",
+        f"Capital deployed: ${already_deployed:.0f} of ${account:.0f}",
+        f"Available: ${available:.0f}",
+        f"Max new position: ${max_new_pos:.0f} (35% cap)",
+        f"Open positions: {open_pos_count} of {MAX_POSITIONS}",
     ]
+
+    if sector_counts:
+        sector_str = " | ".join(
+            f"{s} {c}{'⚠️' if c >= 2 else ''}" for s, c in sector_counts.items()
+        )
+        lines.append(f"Sector exposure: {sector_str}")
+
+    lines += ["", f"⏰ {ts}"]
 
     return "\n".join(lines)
 

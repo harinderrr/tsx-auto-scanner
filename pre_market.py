@@ -21,6 +21,7 @@ import pytz
 import yfinance as yf
 
 from config import Config
+from positions import load_positions
 from layers.layer1_data import (
     add_all_indicators,
     fetch_data,
@@ -416,6 +417,53 @@ def _format_setup_block(rank: int, plan: dict) -> str:
     return "\n".join(lines)
 
 
+def _build_stage3_warnings() -> list[str]:
+    """
+    For each open position at Stage 3, fetch current price and determine
+    whether trail-stop action is needed. Returns warning lines for the briefing.
+    """
+    positions = load_positions()
+    stage3 = [p for p in positions if p.get("stage") == 3]
+    if not stage3:
+        return []
+
+    lines = ["⚠️ Stage 3 positions require attention:"]
+    for pos in stage3:
+        ticker = pos.get("ticker", "")
+        entry = pos.get("entry_price", 0.0)
+        if not entry:
+            continue
+        trail_be = round(entry * 1.02, 2)
+        trail_p2 = round(entry * 1.04, 2)
+        current = None
+        try:
+            import yfinance as yf
+            hist = yf.Ticker(ticker).history(period="1d", interval="1m")
+            if not hist.empty:
+                current = round(float(hist["Close"].iloc[-1]), 2)
+        except Exception:
+            pass
+
+        if current is None:
+            lines.append(f"{ticker} — Trail stop to ${trail_be:.2f} (breakeven) if not done")
+        elif current >= trail_p2:
+            lines.append(
+                f"{ticker} — Price ${current:.2f} reached +4% trigger. "
+                f"Trail stop to +2% (${entry * 1.02:.2f}) now"
+            )
+        elif current >= trail_be:
+            lines.append(
+                f"{ticker} — Price ${current:.2f} reached +2% trigger. "
+                f"Trail stop to breakeven (${entry:.2f}) now"
+            )
+        else:
+            lines.append(
+                f"{ticker} — ${current:.2f} | "
+                f"Trail BE at ${trail_be:.2f} | Trail +2% at ${trail_p2:.2f}"
+            )
+    return lines
+
+
 def _format_briefing(plans: list[dict], ctx: dict, ts: str, is_preclose: bool = False) -> str:
     condition = ctx["condition"]
     emoji = {"BULLISH": "🟢", "NEUTRAL": "🟡", "BEARISH": "🔴"}.get(condition, "🟡")
@@ -457,6 +505,11 @@ def _format_briefing(plans: list[dict], ctx: dict, ts: str, is_preclose: bool = 
     ]
     if condition_note:
         lines.append(condition_note)
+
+    # Stage 3 open position warnings
+    stage3_lines = _build_stage3_warnings()
+    if stage3_lines:
+        lines += ["", DIVIDER] + stage3_lines
 
     lines += ["", f"⏰ {ts}"]
     return "\n".join(lines)
