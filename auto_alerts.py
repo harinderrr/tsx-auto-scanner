@@ -249,19 +249,26 @@ def send_scan_results(plans: list[TradePlan], meta: dict) -> None:
     if not send_message(summary):
         logger.error("Failed to send scan summary")
 
-    # Step 2 — individual ENTER alerts (with deduplication)
+    # Step 2 — ENTER alerts: full detail for A+/B only, watch format for C
     for plan in enters:
         if not _should_alert(plan.ticker, plan.score):
             logger.info(f"Skipping duplicate alert for {plan.ticker}")
             continue
-        text = _format_enter_alert(plan)
+        if plan.grade in ("A+", "B"):
+            text = _format_enter_alert(plan)
+        else:
+            # Grade C enter — send watch format, less noise
+            text = _format_watch_alert(plan)
         if send_message(text):
             _mark_alerted(plan.ticker, plan.score)
         else:
-            logger.error(f"Failed to send ENTER alert for {plan.ticker}")
+            logger.error(f"Failed to send alert for {plan.ticker}")
 
-    # Step 3 — individual WATCH alerts (with deduplication)
+    # Step 3 — WATCH alerts: only send individual cards for A+/B grade
     for plan in watches:
+        if plan.grade == "C" or plan.score < 55:
+            logger.info(f"Suppressing Grade C watch alert for {plan.ticker} — summary only")
+            continue
         if not _should_alert(plan.ticker, plan.score):
             logger.info(f"Skipping duplicate watch alert for {plan.ticker}")
             continue

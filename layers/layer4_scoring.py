@@ -520,7 +520,7 @@ def score_setup(
     else:
         warnings.append("Stop not within 4% of S&R — lower conviction")
 
-    return TradePlan(
+    plan = TradePlan(
         ticker=ticker,
         sector=sector,
         current_price=round(current, 2),
@@ -572,3 +572,38 @@ def score_setup(
         trail_breakeven_trigger=trail_breakeven,
         trail_plus2_trigger=trail_plus2,
     )
+
+    # ── Pattern hierarchy gate ────────────────────────────────
+    SINGLE_CANDLE_PATTERNS = {
+        "Bullish Marubozu", "Bearish Marubozu",
+        "Doji", "Gravestone Doji", "Dragonfly Doji",
+        "Long-legged Doji", "Standard Doji",
+        "Hammer", "Hanging Man",
+        "Shooting Star", "Inverted Hammer",
+        "Spinning Top",
+    }
+    STRUCTURAL_PATTERNS = {
+        "Cup with Handle", "Flat Base", "VCP",
+        "Volatility Contraction Pattern", "Bull Flag",
+        "Bear Flag", "Double Bottom", "Double Top",
+        "Range Breakout", "Rounded Bottom", "Rounded Top",
+        "Morning Star", "Evening Star",
+        "Bullish Engulfing", "Bearish Engulfing",
+        "Piercing Line", "Dark Cloud Cover",
+        "Bullish Harami", "Bearish Harami",
+        "Harami Cross", "Three White Soldiers",
+        "Three Black Crows",
+    }
+
+    primary_is_single_candle = plan.primary_pattern in SINGLE_CANDLE_PATTERNS
+    has_structural = any(p in STRUCTURAL_PATTERNS for p in plan.all_patterns)
+
+    if primary_is_single_candle and not has_structural:
+        if plan.action == "ENTER":
+            plan.action = "WATCH"
+            plan.warnings.append(
+                "Single-candle pattern only — no structural base detected. "
+                "Needs Cup/Handle, Flag, VCP, or Engulfing confirmation to enter."
+            )
+
+    return plan
