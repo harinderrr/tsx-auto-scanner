@@ -605,5 +605,7 @@ def score_setup(
                 "Single-candle pattern only — no structural base detected. "
                 "Needs Cup/Handle, Flag, VCP, or Engulfing confirmation to enter."
             )
+        elif plan.action == "WATCH":
+            plan.action = "SKIP"
 
     return plan
