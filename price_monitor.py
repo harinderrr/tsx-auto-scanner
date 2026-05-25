@@ -251,10 +251,17 @@ def run_price_check() -> None:
         if entry and not _already_alerted(state, ticker, "entry"):
             pct = abs(price - entry) / entry * 100
             if pct <= ENTRY_THRESHOLD_PCT:
-                msg = _format_entry_alert(plan, price, pct, hours_open, ts)
-                if send_message(msg):
-                    _mark_alerted(state, ticker, "entry")
-                    sent += 1
+                grade = plan.get("grade", "")
+                stage_label = plan.get("stage_label", "")
+                if grade == "C":
+                    logger.info(f"Skipping Grade C entry alert for {ticker}")
+                elif "stage 1" in stage_label.lower() or "basing" in stage_label.lower():
+                    logger.info(f"Skipping Stage 1 entry alert for {ticker}")
+                else:
+                    msg = _format_entry_alert(plan, price, pct, hours_open, ts)
+                    if send_message(msg):
+                        _mark_alerted(state, ticker, "entry")
+                        sent += 1
 
         # ── Stop proximity (1.5%) ──────────────────────────────────────────
         if stop and not _already_alerted(state, ticker, "stop"):

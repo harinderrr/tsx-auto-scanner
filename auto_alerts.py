@@ -4,7 +4,7 @@ import os
 from datetime import date, datetime, timedelta
 
 from layers.layer4_scoring import TradePlan
-from positions import capital_deployed, MAX_POSITIONS
+from positions import capital_deployed, is_held, MAX_POSITIONS
 from telegram_bot import send_message
 
 logger = logging.getLogger(__name__)
@@ -249,15 +249,23 @@ def send_scan_results(plans: list[TradePlan], meta: dict) -> None:
     if not send_message(summary):
         logger.error("Failed to send scan summary")
 
-    # Step 2 — ENTER alerts: full detail for A+/B only, watch format for C
+    # Step 2 — ENTER alerts: skip Grade C and Stage 1; is_held check (P3)
     for plan in enters:
         if not _should_alert(plan.ticker, plan.score):
             logger.info(f"Skipping duplicate alert for {plan.ticker}")
             continue
+        if plan.grade == "C":
+            logger.info(f"Skipping Grade C ENTER alert for {plan.ticker} — summary only")
+            continue
+        if "stage 1" in plan.stage_label.lower() or "basing" in plan.stage_label.lower():
+            logger.info(f"Skipping Stage 1 ENTER alert for {plan.ticker} — summary only")
+            continue
+        if is_held(plan.ticker):
+            logger.info(f"Skipping {plan.ticker} — already held")
+            continue
         if plan.grade in ("A+", "B"):
             text = _format_enter_alert(plan)
         else:
-            # Grade C enter — send watch format, less noise
             text = _format_watch_alert(plan)
         if send_message(text):
             _mark_alerted(plan.ticker, plan.score)
