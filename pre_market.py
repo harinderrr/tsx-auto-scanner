@@ -307,6 +307,25 @@ def _run_fallback_scan(index_5d_pct: float) -> list[dict]:
 
 # ── Step 4: Ranking ────────────────────────────────────────────────────────────
 
+def _is_borderline_plan(plan: dict) -> bool:
+    """True if plan qualifies for the BORDERLINE ENTRY tier."""
+    if plan.get("score", 0) < 75:
+        return False
+    if plan.get("stage", 0) != 2:
+        return False
+    if plan.get("grade", "") not in ("A+", "B"):
+        return False
+    if len(plan.get("warnings", [])) != 1:
+        return False
+    entry = plan.get("entry_price", 0.0)
+    current = plan.get("current_price", plan.get("current_price_at_scan", 0.0))
+    if entry and current:
+        dist_pct = abs(current - entry) / entry * 100
+        if dist_pct > 1.0:
+            return False
+    return True
+
+
 def _adjusted_score(plan: dict) -> int:
     score = plan.get("score", 0)
     if plan.get("fib_bonus"):
@@ -351,7 +370,7 @@ def _dist_str(current: float, entry: float) -> str:
     return f"{pct:.1f}% away"
 
 
-def _format_setup_block(rank: int, plan: dict) -> str:
+def _format_setup_block(rank: int, plan: dict, is_borderline: bool = False) -> str:
     ticker   = plan["ticker"]
     sector   = plan["sector"]
     grade    = plan["grade"]
@@ -370,8 +389,9 @@ def _format_setup_block(rank: int, plan: dict) -> str:
     risk_ps  = plan.get("risk_per_share", entry - stop)
     max_loss = round(shares * risk_ps, 2)
 
+    label = "⚡" if is_borderline else f"#{rank}."
     lines = [
-        f"#{rank}. {ticker} [{sector}] — Grade: {grade}",
+        f"{label} {ticker} [{sector}] — Grade: {grade}",
         f"Pattern: {pattern} (strength {strength}/5)",
         f"Stage: {stage}",
         f"Dow Phase: {dow}",
@@ -485,7 +505,7 @@ def _format_briefing(plans: list[dict], ctx: dict, ts: str, is_preclose: bool = 
     lines += [ctx["note"], "", DIVIDER, f"TOP {len(plans)} SETUPS TODAY", DIVIDER]
 
     for i, plan in enumerate(plans, 1):
-        lines += ["", _format_setup_block(i, plan), "", DIVIDER]
+        lines += ["", _format_setup_block(i, plan, is_borderline=_is_borderline_plan(plan)), "", DIVIDER]
 
     condition_note = {
         "BEARISH": "⚠️  Market in downtrend — only highest conviction setups shown",

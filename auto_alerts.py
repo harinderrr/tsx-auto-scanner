@@ -60,7 +60,33 @@ def _mark_alerted(ticker: str, score: int) -> None:
     _save_alerted(alerted)
 
 
+def _is_borderline_enter(plan: "TradePlan") -> bool:
+    """True if plan qualifies for the BORDERLINE ENTRY tier."""
+    if plan.score < 75:
+        return False
+    if plan.stage != 2:
+        return False
+    if plan.grade not in ("A+", "B"):
+        return False
+    if len(plan.warnings) != 1:
+        return False
+    dist_pct = abs(plan.current_price - plan.entry_price) / plan.entry_price * 100
+    return dist_pct <= 1.0
+
+
 # ─── Message formatters ─────────────────────────────────────────────────────
+
+def _format_gap_alert(plan: TradePlan) -> str:
+    ts = datetime.now().strftime("%A %b %d | %I:%M %p MT")
+    gap_pct = (plan.entry_price - plan.current_price) / plan.entry_price * 100
+    return "\n".join([
+        f"⛔ GAP ALERT — {plan.ticker}",
+        f"Price ${plan.current_price:.2f} is {gap_pct:.2f}% below entry zone ${plan.entry_price:.2f}",
+        f"Entry zone has been undercut — skip this setup today.",
+        f"Rule: Do not enter when price gaps more than 0.5% below zone.",
+        f"⏰ {ts}",
+    ])
+
 
 def _format_enter_alert(plan: TradePlan) -> str:
     max_loss = plan.shares_at_2pct * plan.risk_per_share
@@ -170,8 +196,10 @@ def _format_watch_alert(plan: TradePlan) -> str:
 
 def _format_summary(plans: list[TradePlan], meta: dict) -> str:
     enters = [p for p in plans if p.action == "ENTER"]
-    watches = [p for p in plans if p.action == "WATCH"]
-    skipped = meta["total"] - len(enters) - len(watches)
+    all_watches = [p for p in plans if p.action == "WATCH"]
+    borderlines = [p for p in all_watches if _is_borderline_enter(p)]
+    watches = [p for p in all_watches if not _is_borderline_enter(p)]
+    skipped = meta["total"] - len(enters) - len(all_watches)
     duration = meta.get("duration_minutes", 0)
     account = enters[0].account_size if enters else 1490.0
     ts = datetime.now().strftime("%A %b %d | %I:%M %p MT")
@@ -205,6 +233,19 @@ def _format_summary(plans: list[TradePlan], meta: dict) -> str:
             lines.append(f"  • {p.ticker:<8} Score:{p.score}  Entry:${p.entry_price:.2f}  R:R:{p.rrr:.1f}{s3}")
     else:
         lines.append("✅ ENTER NOW (0 setups)")
+
+    lines.append("")
+
+    if borderlines:
+        lines.append(f"⚡ BORDERLINE ENTRY ({len(borderlines)} setup{'s' if len(borderlines) != 1 else ''}):")
+        for p in borderlines:
+            flag_text = p.warnings[0] if p.warnings else "flag present"
+            lines.append(f"  • {p.ticker:<8} Score:{p.score}  Pattern: {p.primary_pattern}")
+            lines.append(f"    Entry: ${p.entry_price:.2f} | Stop: ${p.stop_price:.2f} | R:R {p.rrr:.1f}:1")
+            lines.append(f"    ⚠️ One flag: {flag_text}")
+            lines.append(f"    Manual review recommended before entering.")
+    else:
+        lines.append("⚡ BORDERLINE ENTRY (0 setups)")
 
     lines.append("")
 
@@ -262,6 +303,13 @@ def send_scan_results(plans: list[TradePlan], meta: dict) -> None:
             continue
         if is_held(plan.ticker):
             logger.info(f"Skipping {plan.ticker} — already held")
+            continue
+        gap_pct = (plan.entry_price - plan.current_price) / plan.entry_price * 100
+        if gap_pct > 0.5:
+            logger.info(f"{plan.ticker} — price {gap_pct:.2f}% below entry zone, sending gap alert")
+            gap_msg = _format_gap_alert(plan)
+            if not send_message(gap_msg):
+                logger.error(f"Failed to send gap alert for {plan.ticker}")
             continue
         if plan.grade in ("A+", "B"):
             text = _format_enter_alert(plan)
