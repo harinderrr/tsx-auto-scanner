@@ -14,6 +14,8 @@ from layers.layer1_data import (
 from layers.layer2_patterns import detect_all_patterns
 from layers.layer3_context import detect_dow_phase, detect_sr_zones, detect_stage
 from layers.layer4_scoring import TradePlan, score_setup
+from github_sync import push_score_history_to_github
+from score_history import update_score_history
 from universe import get_earnings_calendar, get_tsx_universe
 
 logger = logging.getLogger(__name__)
@@ -171,6 +173,8 @@ def run_full_scan(account_size: float = None) -> tuple[list[TradePlan], dict]:
     }
 
     _save_scan_results(plans, meta)
+    update_score_history(plans)
+    push_score_history_to_github()
     logger.info(
         f"Scan complete: {len(plans)} setups found | {duration_minutes:.1f} min | "
         f"{skipped} skipped"

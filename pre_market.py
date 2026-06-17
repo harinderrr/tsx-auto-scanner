@@ -22,6 +22,7 @@ import yfinance as yf
 
 from config import Config
 from positions import load_positions
+from score_history import get_score_trend
 from layers.layer1_data import (
     add_all_indicators,
     fetch_data,
@@ -374,6 +375,7 @@ def _format_setup_block(rank: int, plan: dict, is_borderline: bool = False) -> s
     ticker   = plan["ticker"]
     sector   = plan["sector"]
     grade    = plan["grade"]
+    score    = plan.get("score", 0)
     pattern  = plan["primary_pattern"]
     strength = plan["pattern_strength"]
     stage    = plan["stage_label"]
@@ -392,6 +394,12 @@ def _format_setup_block(rank: int, plan: dict, is_borderline: bool = False) -> s
     label = "⚡" if is_borderline else f"#{rank}."
     lines = [
         f"{label} {ticker} [{sector}] — Grade: {grade}",
+        f"Score: {score}/100",
+    ]
+    trend_line = get_score_trend(ticker)
+    if trend_line:
+        lines.append(trend_line)
+    lines += [
         f"Pattern: {pattern} (strength {strength}/5)",
         f"Stage: {stage}",
         f"Dow Phase: {dow}",

@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 
 from layers.layer4_scoring import TradePlan
 from positions import capital_deployed, is_held, MAX_POSITIONS
+from score_history import get_score_trend
 from telegram_bot import send_message
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,11 @@ def _format_enter_alert(plan: TradePlan) -> str:
         f"🔍 SETUP ALERT — {plan.ticker}  [{plan.sector}]",
         "",
         f"Score: {plan.score}/100  |  Grade: {plan.grade}",
+    ]
+    trend_line = get_score_trend(plan.ticker)
+    if trend_line:
+        lines.append(trend_line)
+    lines += [
         f"Pattern: {plan.primary_pattern}  (strength {plan.pattern_strength}/5)",
         f"Stage: {plan.stage_label}",
         f"Dow Phase: {plan.dow_phase}",
@@ -175,6 +181,11 @@ def _format_watch_alert(plan: TradePlan) -> str:
         "",
         f"Pattern: {plan.primary_pattern}  (strength {plan.pattern_strength}/5)",
         f"Stage: {plan.stage_label}  |  Score: {plan.score}/100",
+    ]
+    trend_line = get_score_trend(plan.ticker)
+    if trend_line:
+        lines.append(trend_line)
+    lines += [
         "",
         f"Entry: ${plan.entry_price:.2f}  |  Stop: ${plan.stop_price:.2f}",
         f"Target 1: ${plan.target1_price:.2f}  |  Target 2: ${plan.target2_price:.2f}",
