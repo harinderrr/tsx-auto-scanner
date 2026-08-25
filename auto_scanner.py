@@ -148,6 +148,47 @@ def run_full_scan(account_size: float = None) -> tuple[list[TradePlan], dict]:
             plan = score_setup(ticker, sector, df, patterns, trend, zones, dow_phase, account_size)
 
             if plan and plan.action in ("ENTER", "WATCH"):
+                # Attach supplementary fields from df that layer4 does not pass through
+                r = df.iloc[-1]
+
+                # ADX direction: plus_di vs minus_di
+                plus_di = float(r.get("plus_di", 0))
+                minus_di_val = float(r.get("minus_di", 0))
+                setattr(plan, 'adx_bullish', plus_di > minus_di_val and plan.adx > 20)
+
+                # OBV slope: accumulation vs distribution
+                obv_slope = float(r.get("obv_slope", 0))
+                setattr(plan, 'obv_direction', "accumulation" if obv_slope > 0 else "distribution" if obv_slope < 0 else "neutral")
+
+                # Range position: where in 52-week range is current price
+                high_52w = float(r.get("high_52w", plan.current_price))
+                low_52w = float(r.get("low_52w", plan.current_price))
+                rng = high_52w - low_52w
+                setattr(plan, 'range_position_pct', round((plan.current_price - low_52w) / rng * 100, 1) if rng > 0 else 50.0)
+
+                # MACD acceleration: compare last 3 histogram bars
+                if len(df) >= 3:
+                    h0 = float(df["macd_hist"].iloc[-1])
+                    h1 = float(df["macd_hist"].iloc[-2])
+                    h2 = float(df["macd_hist"].iloc[-3])
+                    if h0 > h1 > h2:
+                        macd_accel = "accelerating"
+                    elif h0 < h1 < h2:
+                        macd_accel = "decelerating"
+                    elif abs(h0 - h1) < 0.001:
+                        macd_accel = "flat"
+                    else:
+                        macd_accel = "mixed"
+                else:
+                    macd_accel = "unknown"
+                setattr(plan, 'macd_acceleration', macd_accel)
+
+                # EMA stack alignment: ema25 and ema50 already in df
+                setattr(plan, 'ema_stack_aligned', (
+                    float(r.get("ema25", 0)) > float(r.get("ema50", 0)) > 0
+                    and plan.current_price > float(r.get("ema25", 0))
+                ))
+
                 plans.append(plan)
                 logger.info(f"[{i}/{total}] {ticker} — Score: {plan.score} | {plan.action} | {plan.primary_pattern}")
             else:

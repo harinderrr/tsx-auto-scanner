@@ -141,18 +141,72 @@ def _format_enter_alert(plan: TradePlan) -> str:
         if "capital cap" in note.lower():
             lines.append(f"⚠️ {note}")
 
+    # ADX direction tag
+    adx_bullish = getattr(plan, 'adx_bullish', None)
+    if adx_bullish is True:
+        adx_str = f"{plan.adx:.1f} ✅ (+DI > -DI)"
+    elif adx_bullish is False:
+        adx_str = f"{plan.adx:.1f} ⚠️ (-DI > +DI, trend bearish)"
+    else:
+        adx_str = f"{plan.adx:.1f}"
+
+    # MACD acceleration tag
+    macd_accel = getattr(plan, 'macd_acceleration', None)
+    macd_accel_map = {
+        "accelerating": f"{plan.macd_hist_direction} ⚡",
+        "decelerating": f"{plan.macd_hist_direction} ↘",
+        "flat": f"{plan.macd_hist_direction} →",
+        "mixed": plan.macd_hist_direction,
+        "unknown": plan.macd_hist_direction,
+    }
+    macd_display = macd_accel_map.get(macd_accel, plan.macd_hist_direction)
+
+    # Range position tag
+    rng_pct = getattr(plan, 'range_position_pct', None)
+    if rng_pct is not None:
+        if rng_pct >= 70:
+            rng_str = f"{rng_pct:.0f}% of 52wk range 🟢"
+        elif rng_pct >= 50:
+            rng_str = f"{rng_pct:.0f}% of 52wk range 🟡"
+        else:
+            rng_str = f"{rng_pct:.0f}% of 52wk range 🔴"
+    else:
+        rng_str = ""
+
+    # OBV direction tag
+    obv_dir = getattr(plan, 'obv_direction', None)
+    obv_str = ""
+    if obv_dir == "accumulation":
+        obv_str = "OBV: 📈 Accumulation"
+    elif obv_dir == "distribution":
+        obv_str = "OBV: 📉 Distribution"
+
+    # EMA stack
+    ema_aligned = getattr(plan, 'ema_stack_aligned', None)
+    ema_str = "EMA stack: ✅ Aligned" if ema_aligned else ""
+
     lines += [
         "",
         "📊 INDICATORS",
-        f"RSI: {plan.rsi:.1f}  |  MACD: {plan.macd_hist_direction}",
-        f"Volume: {plan.volume_ratio:.1f}x avg  |  ADX: {plan.adx:.1f}",
+        f"RSI: {plan.rsi:.1f}  |  MACD: {macd_display}",
+        f"Volume: {plan.volume_ratio:.1f}x avg  |  ADX: {adx_str}",
         f"Fibonacci: {plan.fib_level}  |  BB Squeeze: {squeeze_str}",
-        "",
-        "✅ CONFIRMED",
     ]
+    if rng_str:
+        lines.append(f"Range: {rng_str}")
+    if obv_str:
+        lines.append(obv_str)
+    if ema_str:
+        lines.append(ema_str)
+    lines += ["", "✅ CONFIRMED"]
 
     for item in plan.checklist_items:
         lines.append(f"+ {item}")
+
+    # Append OBV distribution warning if present
+    obv_dir = getattr(plan, 'obv_direction', None)
+    if obv_dir == "distribution" and "OBV distribution" not in " ".join(plan.warnings):
+        plan.warnings.append("OBV slope negative — institutional selling pressure (distribution)")
 
     if plan.warnings:
         lines.append("")
@@ -191,8 +245,10 @@ def _format_watch_alert(plan: TradePlan) -> str:
         f"Target 1: ${plan.target1_price:.2f}  |  Target 2: ${plan.target2_price:.2f}",
         f"R:R: {plan.rrr:.1f}:1",
         "",
-        f"RSI: {plan.rsi:.1f}  |  Volume: {plan.volume_ratio:.1f}x avg",
     ]
+    rng_pct = getattr(plan, 'range_position_pct', None)
+    rng_tag = f"  |  Range: {rng_pct:.0f}%" if rng_pct is not None else ""
+    lines.append(f"RSI: {plan.rsi:.1f}  |  Volume: {plan.volume_ratio:.1f}x avg{rng_tag}")
     if plan.warnings:
         lines.append("")
         for w in plan.warnings:
