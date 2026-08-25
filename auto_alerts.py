@@ -267,6 +267,25 @@ def _format_summary(plans: list[TradePlan], meta: dict) -> str:
     else:
         lines.append("⏳ WATCHING (0 developing)")
 
+    # Best watch candidate highlight
+    enter_tickers = {p.ticker for p in enters}
+    best_watch = None
+    best_score = 0
+    for p in watches:
+        if p.grade in ("A+", "B") and p.score > best_score and p.ticker not in enter_tickers:
+            best_score = p.score
+            best_watch = p
+
+    lines.append("")
+    if best_watch:
+        trend = get_score_trend(best_watch.ticker)
+        rising = trend and "📈" in trend
+        signal_note = " — score rising 📈" if rising else ""
+        lines.append(f"👁 Best watch: {best_watch.ticker} (Score {best_watch.score}, {best_watch.primary_pattern}){signal_note}")
+        lines.append(f"   Review this one first tomorrow if score holds or rises.")
+    else:
+        lines.append("👁 No standout watch candidate today — all developing setups need more time.")
+
     lines += [
         "",
         f"❌ SKIPPED: {skipped} stocks below threshold",
@@ -283,6 +302,11 @@ def _format_summary(plans: list[TradePlan], meta: dict) -> str:
             f"{s} {c}{'⚠️' if c >= 2 else ''}" for s, c in sector_counts.items()
         )
         lines.append(f"Sector exposure: {sector_str}")
+
+    # Seasonal context note (August and September only)
+    if datetime.now().month in (8, 9):
+        lines.append("")
+        lines.append("📅 Seasonal note: Aug-Sep historically weak on TSX — require stronger confirmation before entering any setup this month.")
 
     lines += ["", f"⏰ {ts}"]
 
