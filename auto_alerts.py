@@ -95,8 +95,10 @@ def _format_enter_alert(plan: TradePlan) -> str:
     ts = datetime.now().strftime("%A %b %d | %I:%M %p MT")
     max_cap = round(plan.account_size * 0.35, 2)
 
+    sector_rs_val = getattr(plan, 'sector_rs', 'neutral')
+    rs_tag = {"tailwind": "↑ tailwind", "headwind": "↓ headwind", "neutral": "→ neutral"}.get(sector_rs_val, "")
     lines = [
-        f"🔍 SETUP ALERT — {plan.ticker}  [{plan.sector}]",
+        f"🔍 SETUP ALERT — {plan.ticker}  [{plan.sector}]  {rs_tag}",
         "",
         f"Score: {plan.score}/100  |  Grade: {plan.grade}",
     ]
@@ -202,6 +204,9 @@ def _format_enter_alert(plan: TradePlan) -> str:
 
     for item in plan.checklist_items:
         lines.append(f"+ {item}")
+
+    if getattr(plan, 'commodity_headwind', False):
+        plan.warnings.append("⚠️ Commodity headwind detected — crude oil or sector ETF declining")
 
     # Append OBV distribution warning if present
     obv_dir = getattr(plan, 'obv_direction', None)
@@ -363,6 +368,19 @@ def _format_summary(plans: list[TradePlan], meta: dict) -> str:
     if datetime.now().month in (8, 9):
         lines.append("")
         lines.append("📅 Seasonal note: Aug-Sep historically weak on TSX — require stronger confirmation before entering any setup this month.")
+
+    breadth_pct = meta.get("breadth_pct")
+    if breadth_pct is not None:
+        breadth_above = meta.get("breadth_above", 0)
+        breadth_total = meta.get("breadth_total", 0)
+        if breadth_pct >= 60:
+            breadth_label = "healthy"
+        elif breadth_pct >= 40:
+            breadth_label = "mixed"
+        else:
+            breadth_label = "caution — broad weakness"
+        lines.append("")
+        lines.append(f"📈 Market breadth: {breadth_pct}% above EMA ({breadth_above}/{breadth_total}) — {breadth_label}")
 
     lines += ["", f"⏰ {ts}"]
 
