@@ -209,7 +209,8 @@ def _filter_by_market_cap(stocks: list[dict]) -> list[dict]:
 
 def _fetch_wikipedia() -> list[dict]:
     url = "https://en.wikipedia.org/wiki/S%26P/TSX_Composite_Index"
-    tables = pd.read_html(url, flavor="lxml")
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    tables = pd.read_html(url, flavor="lxml", storage_options=headers)
 
     for tbl in tables:
         cols_lower = [str(c).lower() for c in tbl.columns]
