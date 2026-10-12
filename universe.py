@@ -7,71 +7,150 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
-# S&P/TSX 60 backup — clean tickers only (no dashes/dots besides .TO)
+# TSX Composite backup — clean tickers only (no dashes/dots besides .TO)
 TSX_60_BACKUP = [
-    # Energy
-    {"ticker": "SU.TO",  "sector": "Energy"},
-    {"ticker": "CNQ.TO", "sector": "Energy"},
-    {"ticker": "TRP.TO", "sector": "Energy"},
-    {"ticker": "ENB.TO", "sector": "Energy"},
-    {"ticker": "IMO.TO", "sector": "Energy"},
-    {"ticker": "CVE.TO", "sector": "Energy"},
-    {"ticker": "ARX.TO", "sector": "Energy"},
-    # Materials
-    {"ticker": "ABX.TO", "sector": "Materials"},
-    {"ticker": "AEM.TO", "sector": "Materials"},
-    {"ticker": "WPM.TO", "sector": "Materials"},
-    {"ticker": "K.TO",   "sector": "Materials"},
-    {"ticker": "CCO.TO", "sector": "Materials"},
-    {"ticker": "FM.TO",  "sector": "Materials"},
-    {"ticker": "NTR.TO", "sector": "Materials"},
-    {"ticker": "AGI.TO", "sector": "Materials"},
-    {"ticker": "LUN.TO", "sector": "Materials"},
     # Financials
     {"ticker": "RY.TO",  "sector": "Financials"},
     {"ticker": "TD.TO",  "sector": "Financials"},
     {"ticker": "BNS.TO", "sector": "Financials"},
     {"ticker": "BMO.TO", "sector": "Financials"},
     {"ticker": "CM.TO",  "sector": "Financials"},
+    {"ticker": "NA.TO",  "sector": "Financials"},
     {"ticker": "MFC.TO", "sector": "Financials"},
     {"ticker": "SLF.TO", "sector": "Financials"},
     {"ticker": "GWO.TO", "sector": "Financials"},
-    {"ticker": "IFC.TO", "sector": "Financials"},
-    {"ticker": "FFH.TO", "sector": "Financials"},
     {"ticker": "POW.TO", "sector": "Financials"},
-    {"ticker": "EQB.TO", "sector": "Financials"},
-    {"ticker": "BAM.TO", "sector": "Financials"},
+    {"ticker": "FFH.TO", "sector": "Financials"},
+    {"ticker": "IAG.TO", "sector": "Financials"},
+    {"ticker": "IFC.TO", "sector": "Financials"},
     {"ticker": "BN.TO",  "sector": "Financials"},
+    {"ticker": "BAM.TO", "sector": "Financials"},
+    {"ticker": "EQB.TO", "sector": "Financials"},
+    {"ticker": "CWB.TO", "sector": "Financials"},
     {"ticker": "X.TO",   "sector": "Financials"},
+    {"ticker": "SFC.TO", "sector": "Financials"},
+    {"ticker": "HCG.TO", "sector": "Financials"},
+    {"ticker": "CF.TO",  "sector": "Financials"},
+    {"ticker": "PWF.TO", "sector": "Financials"},
+    {"ticker": "GWL.TO", "sector": "Financials"},
+    {"ticker": "CIX.TO", "sector": "Financials"},
+    {"ticker": "LB.TO",  "sector": "Financials"},
+    {"ticker": "TDB.TO", "sector": "Financials"},
+    # Energy
+    {"ticker": "CNQ.TO", "sector": "Energy"},
+    {"ticker": "SU.TO",  "sector": "Energy"},
+    {"ticker": "CVE.TO", "sector": "Energy"},
+    {"ticker": "IMO.TO", "sector": "Energy"},
+    {"ticker": "ENB.TO", "sector": "Energy"},
+    {"ticker": "TRP.TO", "sector": "Energy"},
+    {"ticker": "PPL.TO", "sector": "Energy"},
+    {"ticker": "ARX.TO", "sector": "Energy"},
+    {"ticker": "BTE.TO", "sector": "Energy"},
+    {"ticker": "ERF.TO", "sector": "Energy"},
+    {"ticker": "CPG.TO", "sector": "Energy"},
+    {"ticker": "MEG.TO", "sector": "Energy"},
+    {"ticker": "PEY.TO", "sector": "Energy"},
+    {"ticker": "WCP.TO", "sector": "Energy"},
+    {"ticker": "TVE.TO", "sector": "Energy"},
+    {"ticker": "CR.TO",  "sector": "Energy"},
+    {"ticker": "TOU.TO", "sector": "Energy"},
+    {"ticker": "KEL.TO", "sector": "Energy"},
+    {"ticker": "PXT.TO", "sector": "Energy"},
+    {"ticker": "VET.TO", "sector": "Energy"},
+    # Materials
+    {"ticker": "NTR.TO",    "sector": "Materials"},
+    {"ticker": "ABX.TO",    "sector": "Materials"},
+    {"ticker": "WPM.TO",    "sector": "Materials"},
+    {"ticker": "AGI.TO",    "sector": "Materials"},
+    {"ticker": "FM.TO",     "sector": "Materials"},
+    {"ticker": "CCO.TO",    "sector": "Materials"},
+    {"ticker": "K.TO",      "sector": "Materials"},
+    {"ticker": "AEM.TO",    "sector": "Materials"},
+    {"ticker": "FNV.TO",    "sector": "Materials"},
+    {"ticker": "LUN.TO",    "sector": "Materials"},
+    {"ticker": "TECK.B.TO", "sector": "Materials"},
+    {"ticker": "ERO.TO",    "sector": "Materials"},
+    {"ticker": "HBM.TO",    "sector": "Materials"},
+    {"ticker": "IMG.TO",    "sector": "Materials"},
+    {"ticker": "OR.TO",     "sector": "Materials"},
+    {"ticker": "EDV.TO",    "sector": "Materials"},
+    {"ticker": "CS.TO",     "sector": "Materials"},
+    {"ticker": "KL.TO",     "sector": "Materials"},
+    {"ticker": "SAP.TO",    "sector": "Materials"},
+    {"ticker": "MUX.TO",    "sector": "Materials"},
     # Industrials
     {"ticker": "CNR.TO",  "sector": "Industrials"},
     {"ticker": "CP.TO",   "sector": "Industrials"},
     {"ticker": "WSP.TO",  "sector": "Industrials"},
-    {"ticker": "CAE.TO",  "sector": "Industrials"},
-    {"ticker": "TFII.TO", "sector": "Industrials"},
-    {"ticker": "GFL.TO",  "sector": "Industrials"},
+    {"ticker": "SNC.TO",  "sector": "Industrials"},
     {"ticker": "STN.TO",  "sector": "Industrials"},
     {"ticker": "TIH.TO",  "sector": "Industrials"},
-    # Technology
-    {"ticker": "SHOP.TO", "sector": "Technology"},
-    {"ticker": "CSU.TO",  "sector": "Technology"},
-    {"ticker": "OTEX.TO", "sector": "Technology"},
-    {"ticker": "CLS.TO",  "sector": "Technology"},
-    {"ticker": "CGI.TO",  "sector": "Technology"},
-    # Consumer
-    {"ticker": "ATD.TO", "sector": "Consumer Staples"},
-    {"ticker": "L.TO",   "sector": "Consumer Staples"},
-    {"ticker": "DOL.TO", "sector": "Consumer Staples"},
-    {"ticker": "MRU.TO", "sector": "Consumer Staples"},
-    {"ticker": "SAP.TO", "sector": "Consumer Staples"},
+    {"ticker": "CAE.TO",  "sector": "Industrials"},
+    {"ticker": "TFI.TO",  "sector": "Industrials"},
+    {"ticker": "GFL.TO",  "sector": "Industrials"},
+    {"ticker": "BYD.TO",  "sector": "Industrials"},
+    {"ticker": "AC.TO",   "sector": "Industrials"},
+    {"ticker": "CJT.TO",  "sector": "Industrials"},
+    {"ticker": "MDA.TO",  "sector": "Industrials"},
+    {"ticker": "NWC.TO",  "sector": "Industrials"},
+    {"ticker": "RBA.TO",  "sector": "Industrials"},
+    {"ticker": "WCN.TO",  "sector": "Industrials"},
+    {"ticker": "ATRL.TO", "sector": "Industrials"},
+    {"ticker": "ARE.TO",  "sector": "Industrials"},
+    # Consumer Staples and Discretionary
+    {"ticker": "L.TO",     "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "MRU.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "ATD.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "DOL.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "EMP.A.TO", "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "WN.TO",    "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "PBH.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "GIL.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "CTC.A.TO", "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "MTY.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "TSC.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "ATZ.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "RCH.TO",   "sector": "Consumer Staples and Discretionary"},
+    {"ticker": "TRI.TO",   "sector": "Consumer Staples and Discretionary"},
     # Utilities
     {"ticker": "FTS.TO", "sector": "Utilities"},
     {"ticker": "EMA.TO", "sector": "Utilities"},
     {"ticker": "H.TO",   "sector": "Utilities"},
     {"ticker": "AQN.TO", "sector": "Utilities"},
-    # Communication
-    {"ticker": "BCE.TO", "sector": "Communication Services"},
-    {"ticker": "T.TO",   "sector": "Communication Services"},
+    {"ticker": "CPX.TO", "sector": "Utilities"},
+    {"ticker": "NPI.TO", "sector": "Utilities"},
+    {"ticker": "INE.TO", "sector": "Utilities"},
+    {"ticker": "BLX.TO", "sector": "Utilities"},
+    {"ticker": "CU.TO",  "sector": "Utilities"},
+    {"ticker": "TA.TO",  "sector": "Utilities"},
+    {"ticker": "ALA.TO", "sector": "Utilities"},
+    # Technology
+    {"ticker": "SHOP.TO", "sector": "Technology"},
+    {"ticker": "CSU.TO",  "sector": "Technology"},
+    {"ticker": "CGI.TO",  "sector": "Technology"},
+    {"ticker": "OTEX.TO", "sector": "Technology"},
+    {"ticker": "BB.TO",   "sector": "Technology"},
+    {"ticker": "KXS.TO",  "sector": "Technology"},
+    {"ticker": "DND.TO",  "sector": "Technology"},
+    {"ticker": "ENGH.TO", "sector": "Technology"},
+    {"ticker": "CLS.TO",  "sector": "Technology"},
+    # Communication Services
+    {"ticker": "BCE.TO",   "sector": "Communication Services"},
+    {"ticker": "T.TO",     "sector": "Communication Services"},
+    {"ticker": "RCI.B.TO", "sector": "Communication Services"},
+    {"ticker": "QBR.B.TO", "sector": "Communication Services"},
+    {"ticker": "MBT.TO",   "sector": "Communication Services"},
+    # Real Estate
+    {"ticker": "REI.UN.TO", "sector": "Real Estate"},
+    {"ticker": "CAR.UN.TO", "sector": "Real Estate"},
+    {"ticker": "GRT.UN.TO", "sector": "Real Estate"},
+    {"ticker": "SRU.UN.TO", "sector": "Real Estate"},
+    {"ticker": "CHP.UN.TO", "sector": "Real Estate"},
+    {"ticker": "HR.UN.TO",  "sector": "Real Estate"},
+    {"ticker": "AP.UN.TO",  "sector": "Real Estate"},
+    {"ticker": "BEI.UN.TO", "sector": "Real Estate"},
+    {"ticker": "BIP.UN.TO", "sector": "Real Estate"},
+    {"ticker": "BEP.UN.TO", "sector": "Real Estate"},
 ]
 
 _TICKER_RE = re.compile(r"^[A-Z0-9]+\.TO$")
@@ -86,6 +165,46 @@ def _clean_ticker(raw: str) -> str | None:
     if not raw.endswith(".TO"):
         raw = raw + ".TO"
     return raw if _TICKER_RE.match(raw) else None
+
+
+def _get_market_cap(ticker: str) -> float | None:
+    """Return fast_info market cap for ticker, or None on any failure."""
+    try:
+        fast_info = yf.Ticker(ticker).fast_info
+    except Exception:
+        return None
+    try:
+        market_cap = fast_info.get("marketCap") if hasattr(fast_info, "get") else None
+    except Exception:
+        market_cap = None
+    if market_cap is None:
+        market_cap = getattr(fast_info, "market_cap", None)
+    return market_cap
+
+
+def _filter_by_market_cap(stocks: list[dict]) -> list[dict]:
+    """Keep only stocks with a usable fast_info market cap above $500M.
+
+    Falls back to the unfiltered list if fewer than 80 stocks survive, to
+    protect against yfinance being temporarily unavailable.
+    """
+    filtered = []
+    for stock in stocks:
+        market_cap = _get_market_cap(stock["ticker"])
+        if not market_cap:
+            continue
+        if market_cap > 500_000_000:
+            filtered.append(stock)
+
+    if len(filtered) < 80:
+        logger.warning(
+            f"Market cap filter kept only {len(filtered)} stocks (<80); "
+            "skipping filter and using unfiltered Wikipedia list."
+        )
+        return stocks
+
+    logger.info(f"Market cap filter: {len(filtered)}/{len(stocks)} stocks kept")
+    return filtered
 
 
 def _fetch_wikipedia() -> list[dict]:
@@ -122,7 +241,7 @@ def _fetch_wikipedia() -> list[dict]:
 
         if len(result) >= 50:
             logger.info(f"Wikipedia: loaded {len(result)} TSX stocks")
-            return result
+            return _filter_by_market_cap(result)
 
     raise ValueError("No suitable constituent table found on Wikipedia page")
 
